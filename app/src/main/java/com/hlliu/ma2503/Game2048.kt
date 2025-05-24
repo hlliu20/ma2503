@@ -11,6 +11,7 @@ import android.view.MotionEvent
 import android.widget.Button
 import android.widget.GridLayout
 import android.widget.TextView
+import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
@@ -18,7 +19,7 @@ import androidx.core.view.WindowInsetsCompat
 import kotlin.math.abs
 import kotlin.random.Random
 
-class Game2048 : AppCompatActivity() {
+class Game2048 : ComponentActivity() {
     companion object {
         const val SIZE = 4 // 游戏网格大小
     }

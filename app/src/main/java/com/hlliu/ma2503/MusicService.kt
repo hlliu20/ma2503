@@ -1,11 +1,13 @@
 package com.hlliu.ma2503
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.media.MediaPlayer
 import android.os.Binder
@@ -15,6 +17,7 @@ import android.os.IBinder
 import android.util.Log
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import java.io.File
 import java.io.IOException
 import java.util.Locale
@@ -44,21 +47,44 @@ class MusicService : Service() {
         return binder
     }
 
+    private fun requestPermissions() {
+        val permissions =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE){
+//                arrayOf(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
+                arrayOf(Manifest.permission.READ_MEDIA_AUDIO)
+            } else if (Build.VERSION.SDK_INT == Build.VERSION_CODES.TIRAMISU) {
+                arrayOf(Manifest.permission.READ_MEDIA_AUDIO)
+            } else {
+                arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+            }
+
+        if (permissions.all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }){
+            loadMusicFiles()
+        } else {
+            val intent = Intent(this, ActivityPermission::class.java)
+            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            startActivity(intent)
+        }
+    }
     override fun onCreate() {
         super.onCreate()
+
         notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         createNotificationChannel()
         mediaPlayer = MediaPlayer()
-        loadMusicFiles()
         mediaPlayer.setOnPreparedListener {
             isPlaying = true
             mediaPlayer.start()
             startForeground(NOTIFICATION_ID, buildNotification())
+            notificationManager.notify(NOTIFICATION_ID, buildNotification())
         }
         mediaPlayer.setOnCompletionListener {
             playNextSong()
         }
         handler.post(runnable)
+
+        songNames = emptyList()
+        requestPermissions()
     }
 
     private fun createNotificationChannel() {
@@ -71,7 +97,7 @@ class MusicService : Service() {
     }
 
     private fun loadMusicFiles() {
-        val musicFiles = getMusicFilesFromDirectory(musicDir)
+        val musicFiles = getMusicFilesFromDirectory()
         if (musicFiles.isNotEmpty()) {
             songNames = musicFiles.map { it.name }
             loadSong()
@@ -81,8 +107,8 @@ class MusicService : Service() {
         }
     }
 
-    private fun getMusicFilesFromDirectory(directory: String): List<File> {
-        val musicDir = File(directory)
+    private fun getMusicFilesFromDirectory(): List<File> {
+        val musicDir = File(musicDir)
         return musicDir.listFiles { file -> file.name.endsWith(".mp3") }?.toList() ?: emptyList()
     }
 
@@ -151,6 +177,7 @@ class MusicService : Service() {
                 ACTION_PREVIOUS -> playPreviousSong()
                 ACTION_NEXT -> playNextSong()
                 ACTION_STOP -> stopSelf()
+                ACTION_LOAD -> loadMusicFiles()
             }
         }
         return START_NOT_STICKY
@@ -216,5 +243,6 @@ class MusicService : Service() {
         const val ACTION_PREVIOUS = "com.hlliu.ma2503.ACTION_PREVIOUS"
         const val ACTION_NEXT = "com.hlliu.ma2503.ACTION_NEXT"
         const val ACTION_STOP = "com.hlliu.ma2503.ACTION_STOP"
+        const val ACTION_LOAD = "com.hlliu.ma2503.ACTION_LOAD"
     }
 }

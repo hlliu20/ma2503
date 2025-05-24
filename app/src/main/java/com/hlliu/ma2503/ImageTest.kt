@@ -1,11 +1,9 @@
 package com.hlliu.ma2503
 
 import android.Manifest
-import android.annotation.SuppressLint
 import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.ContentValues
-import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
@@ -20,11 +18,10 @@ import android.widget.EditText
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -47,10 +44,7 @@ data class MediaItem(
     val uri: Uri
 )
 
-class ImageTest : AppCompatActivity() {
-    companion object {
-        const val REQUEST_CODE_PERMISSION = 1001
-    }
+class ImageTest : ComponentActivity() {
     private lateinit var btnCheck: Button
     private lateinit var tvImageInfo: TextView
     private lateinit var ivImage: ImageView
@@ -120,47 +114,38 @@ class ImageTest : AppCompatActivity() {
         return images
     }
 
-    @SuppressLint("SetTextI18n")
-    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    val permissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val granted = permissions.entries.all {
+            it.value == true
+        }
+        if (granted) {
+            tvImageInfo.text = "权限已授予"
+            loadImagesFromGallery()
+        } else {
+            tvImageInfo.text = "权限被拒绝"
+        }
+    }
+
     fun requestPermissions() {
-        val permissions = arrayOf(
-//            Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED,
-            Manifest.permission.CAMERA,
-            Manifest.permission.READ_MEDIA_IMAGES,
-            Manifest.permission.READ_MEDIA_AUDIO,
-            Manifest.permission.READ_MEDIA_VIDEO
-        )
+        val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE){
+//            arrayOf(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
+            arrayOf(Manifest.permission.READ_MEDIA_IMAGES)
+        } else if (Build.VERSION.SDK_INT == Build.VERSION_CODES.TIRAMISU) {
+            arrayOf(Manifest.permission.READ_MEDIA_IMAGES)
+        } else {
+            arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+
         if (btnCheck.text == "check" && permissions.all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }){
             tvImageInfo.text = "权限已授予"
+            loadImagesFromGallery()
         } else {
-            ActivityCompat.requestPermissions(
-                this,
-                permissions,
-                REQUEST_CODE_PERMISSION
-            )
+            permissionLauncher.launch(permissions)
         }
     }
 
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQUEST_CODE_PERMISSION) {
-
-            if(grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-//                println(grantResults.toString())
-//                println(permissions.toString())
-//                println(requestCode.toString())
-                Toast.makeText(this, "权限已授予", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(this, "权限被拒绝", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -171,7 +156,7 @@ class ImageTest : AppCompatActivity() {
             insets
         }
         // 初始化 SharedPreferences
-        sharedPreferences = getSharedPreferences("AppPreferences", Context.MODE_PRIVATE)
+        sharedPreferences = getSharedPreferences("AppPreferences", MODE_PRIVATE)
         // 从 SharedPreferences 中读取 pageSize，如果没有则使用默认值 20
         pageSize = sharedPreferences.getInt("pageSize", 20)
         btnCheck = findViewById(R.id.btnCheck)

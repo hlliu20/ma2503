@@ -1,29 +1,33 @@
 package com.hlliu.ma2503
 
+import android.Manifest.permission.ACCESS_COARSE_LOCATION
+import android.Manifest.permission.ACCESS_FINE_LOCATION
+import android.content.Context
 import android.content.pm.PackageManager
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.location.Location
-import android.location.LocationManager
 import android.location.LocationListener
+import android.location.LocationManager
 import android.os.Bundle
 import android.view.animation.Animation
 import android.view.animation.RotateAnimation
 import android.widget.ImageView
 import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
-import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.ActivityCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import android.Manifest.permission.ACCESS_FINE_LOCATION
-import android.Manifest.permission.ACCESS_COARSE_LOCATION
-import android.content.Context
-import android.widget.Toast
+import com.google.android.gms.common.ConnectionResult
+import com.google.android.gms.common.GoogleApiAvailability
+import java.util.Locale
 
-class ActivityCompass : AppCompatActivity(),SensorEventListener {
+class ActivityCompass : ComponentActivity(),SensorEventListener {
     private lateinit var sensorManager: SensorManager
     private lateinit var accelerometerSensor: Sensor
     private lateinit var magnetometerSensor: Sensor
@@ -40,6 +44,29 @@ class ActivityCompass : AppCompatActivity(),SensorEventListener {
     private var lastMagnetometerSet = false
 
     private var azimuth = 0f
+    private var useGoogle = false
+    private fun isLocationEnabled(context: Context): Boolean {
+        val locationManager = context.getSystemService(LOCATION_SERVICE) as LocationManager
+        return locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+                locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+    }
+
+    private fun checkLocationSettings() {
+        if (!isLocationEnabled(this)) {
+            Toast.makeText(this, "Please enable location services", Toast.LENGTH_SHORT).show()
+//            val intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+//            startActivity(intent)
+        } else {
+            getCurrentLocation()
+        }
+    }
+    private fun checkGooglePlayServices() {
+        val googleApiAvailability = GoogleApiAvailability.getInstance()
+        val status = googleApiAvailability.isGooglePlayServicesAvailable(this)
+        if (status == ConnectionResult.SUCCESS) {
+            useGoogle = true
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -58,9 +85,25 @@ class ActivityCompass : AppCompatActivity(),SensorEventListener {
         accelerometerSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)!!
         magnetometerSensor = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)!!
 
-        locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
-
+        locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
+        checkGooglePlayServices()
+        checkLocationSettings()
         checkLocationPermissions()
+    }
+    private val requestNotificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val isGranted = permissions.entries.all {
+            it.value == true
+        }
+        if (isGranted) {
+            // 权限被授予
+            Toast.makeText(this, "定位权限已开启", Toast.LENGTH_SHORT).show()
+        } else {
+            // 权限被拒绝
+            Toast.makeText(this, "定位权限被拒绝", Toast.LENGTH_SHORT).show()
+        }
+        getCurrentLocation()
     }
     private fun checkLocationPermissions() {
         val permissions = arrayOf(ACCESS_FINE_LOCATION, ACCESS_COARSE_LOCATION)
@@ -69,11 +112,7 @@ class ActivityCompass : AppCompatActivity(),SensorEventListener {
             }) {
             getCurrentLocation()
         } else {
-            ActivityCompat.requestPermissions(
-                this,
-                permissions,
-                LOCATION_PERMISSION_REQUEST_CODE
-            )
+            requestNotificationPermissionLauncher.launch(permissions)
         }
     }
 
@@ -106,8 +145,15 @@ class ActivityCompass : AppCompatActivity(),SensorEventListener {
             SensorManager.getOrientation(rotationMatrix, orientationAngles)
 
             azimuth = Math.toDegrees(orientationAngles[0].toDouble()).toFloat()
-            azimuth = (azimuth + 360) % 360
-
+//            azimuth = (azimuth + 360) % 360
+            directionTextView.text = buildString {
+                append("方位角:")
+                append(String.format(locale = Locale.CHINA, "%.1f",azimuth))
+                append("\n俯仰角:")
+                append(String.format(locale = Locale.CHINA, "%.1f",Math.toDegrees(orientationAngles[1].toDouble()).toFloat()))
+                append("\n滚动角:")
+                append(String.format(locale = Locale.CHINA, "%.1f",Math.toDegrees(orientationAngles[2].toDouble()).toFloat()))
+            }
             updateCompassDisplay(azimuth)
         }
     }
@@ -126,7 +172,7 @@ class ActivityCompass : AppCompatActivity(),SensorEventListener {
         this.azimuth = azimuth
 
 //        val direction = getDirection(azimuth)
-        directionTextView.text = azimuth.toString()
+
     }
 
     private fun getDirection(azimuth: Float): String {

@@ -7,10 +7,11 @@ import android.net.Uri
 import android.os.Bundle
 import android.view.ScaleGestureDetector
 import android.widget.ImageView
+import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 
-class ImageDetailActivity : AppCompatActivity() {
+class ImageDetailActivity : ComponentActivity() {
 
 //    private lateinit var imageView: ImageView
 //    private lateinit var scaleGestureDetector: ScaleGestureDetector

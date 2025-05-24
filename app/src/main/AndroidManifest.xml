@@ -24,15 +24,18 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" /> <!-- 储存 -->
-    <!-- Devices running Android 12L (API level 32) or lower -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
-    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" /> <!-- To handle the reselection within the app on Android 14 (API level 34) -->
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+
+    <permission
+        android:name="com.hlliu.ma2503.MY_SERVICE_PERMISSION"
+        android:protectionLevel="signature" />
 
     <application
         android:allowBackup="true"
@@ -46,6 +49,9 @@
         android:usesCleartextTraffic="true"
         tools:targetApi="31">
         <activity
+            android:name=".ActivityPermission"
+            android:exported="false" />
+        <activity
             android:name=".MusicActivity3"
             android:exported="false" />
 
@@ -53,7 +59,12 @@
             android:name=".MusicService"
             android:enabled="true"
             android:exported="true"
-            android:foregroundServiceType="mediaPlayback" />
+            android:foregroundServiceType="mediaPlayback"
+            android:permission="com.hlliu.ma2503.MY_SERVICE_PERMISSION">
+            <intent-filter>
+                <action android:name="com.hlliu.ma2503.ACTION_LOAD" />
+            </intent-filter>
+        </service>
 
         <activity
             android:name=".MusicActivity2"

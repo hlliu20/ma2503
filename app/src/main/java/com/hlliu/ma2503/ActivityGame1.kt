@@ -12,10 +12,11 @@ import android.view.SurfaceView
 import android.view.Display
 import android.view.Window
 import android.widget.Toast
+import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 
-class ActivityGame1 : AppCompatActivity(), SensorEventListener {
+class ActivityGame1 : ComponentActivity(), SensorEventListener {
 //    override fun onCreate(savedInstanceState: Bundle?) {
 //        super.onCreate(savedInstanceState)
 //        enableEdgeToEdge()

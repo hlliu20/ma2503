@@ -1,7 +1,9 @@
 package com.hlliu.ma2503
 
 import android.Manifest
+import android.content.pm.PackageManager
 import android.media.MediaPlayer
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -11,6 +13,7 @@ import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import java.io.File
@@ -44,8 +47,11 @@ class MusicActivity : ComponentActivity() {
     private lateinit var songNames: List<String>
     // 请求权限
     private val requestPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted: Boolean ->
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val isGranted = permissions.entries.all {
+            it.value == true
+        }
         if (isGranted) {
             // 权限已授予，加载歌曲
             loadMusicFiles()
@@ -75,7 +81,7 @@ class MusicActivity : ComponentActivity() {
         seekBar = findViewById(R.id.seek_bar)
 
 //         请求存储权限
-        requestPermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
+        requestPermissions()
         // 初始化 MediaPlayer
         mediaPlayer = MediaPlayer()
 
@@ -113,8 +119,27 @@ class MusicActivity : ComponentActivity() {
             playNextSong()
         }
     }
+
+    private fun requestPermissions() {
+        val permissions =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE){
+//                arrayOf(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
+                arrayOf(Manifest.permission.READ_MEDIA_AUDIO)
+            } else if (Build.VERSION.SDK_INT == Build.VERSION_CODES.TIRAMISU) {
+                arrayOf(Manifest.permission.READ_MEDIA_AUDIO)
+            } else {
+                arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+            }
+
+        if (permissions.all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }){
+            loadMusicFiles()
+        } else {
+            requestPermissionLauncher.launch(permissions)
+        }
+    }
+
     private fun loadMusicFiles() {
-        val musicFiles = getMusicFilesFromDirectory(musicDir)
+        val musicFiles = getMusicFilesFromDirectory()
         if (musicFiles.isNotEmpty()) {
             val songNames = mutableListOf<String>()
             for(music in musicFiles){
@@ -130,8 +155,8 @@ class MusicActivity : ComponentActivity() {
             println("$musicDir 文件夹内未找到.mp3文件")
         }
     }
-    private fun getMusicFilesFromDirectory(directory: String): List<File> {
-        val musicDir = File(directory)
+    private fun getMusicFilesFromDirectory(): List<File> {
+        val musicDir = File(musicDir)
         return musicDir.listFiles { file -> file.name.endsWith(".mp3") }?.toList() ?: emptyList()
     }
     private fun togglePlayPause() {
