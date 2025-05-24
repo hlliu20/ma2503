@@ -65,7 +65,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:srcCompat="@drawable/aku"
         android:src="@drawable/aku"
-        android:background="@drawable/afg"/>
+        android:background="@drawable/circle_background_black"/>
 
     <ImageButton
         android:id="@+id/ibtnPlaylist"

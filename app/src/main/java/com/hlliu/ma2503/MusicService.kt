@@ -8,28 +8,29 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Color
 import android.media.MediaPlayer
 import android.os.Binder
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
-import android.util.Log
+import android.os.Looper
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.toColorInt
 import java.io.File
 import java.io.IOException
 import java.util.Locale
-import androidx.core.graphics.toColorInt
+import kotlin.random.Random
 
 class MusicService : Service() {
     private val binder = MusicBinder()
-    private val handler = Handler()
+    private val handler = Handler(Looper.getMainLooper())
     private val runnable = object : Runnable {
         override fun run() {
             if (mediaPlayer.isPlaying) {
                 notificationManager.notify(NOTIFICATION_ID, buildNotification())
+                notifyProgressChanged(mediaPlayer.currentPosition)
             }
             handler.postDelayed(this, 1000)
         }
@@ -41,10 +42,68 @@ class MusicService : Service() {
     private var isPlaying = false
     private val musicDir = "/storage/emulated/0/01myfile/music/"
     private val NOTIFICATION_ID = 1
-    private val CHANNEL_ID = "music_channel"
+    private val CHANNEL_ID: String = "music_channel"
+    enum class PlayMode {
+        RANDOM, // 随机播放
+        LOOP,   // 列表循环
+        REPEAT  // 单曲循环
+    }
+    private var playMode = PlayMode.RANDOM
+    interface MusicServiceCallback {
+        fun onPlayPauseChanged(isPlaying: Boolean)
+        fun onSongChanged(songName: String, duration: Int)
+        fun onProgressChanged(currentTime: Int)
+        fun onPlayModeChanged(newPlayMode: PlayMode)
+    }
+
+    private val callbacks = mutableListOf<MusicServiceCallback>()
+
+    fun registerCallback(callback: MusicServiceCallback) {
+        callbacks.add(callback)
+    }
+
+    fun unregisterCallback(callback: MusicServiceCallback) {
+        callbacks.remove(callback)
+    }
+
+    private fun notifyPlayPauseChanged(isPlaying: Boolean) {
+        callbacks.forEach { it.onPlayPauseChanged(isPlaying) }
+    }
+
+    private fun notifySongChanged(songName: String, duration: Int) {
+        callbacks.forEach { it.onSongChanged(songName, duration) }
+    }
+
+    private fun notifyProgressChanged(currentTime: Int) {
+        callbacks.forEach { it.onProgressChanged(currentTime) }
+    }
+    private fun notifyPlayModeChanged(newPlayMode: PlayMode) {
+        callbacks.forEach { it.onPlayModeChanged(newPlayMode) }
+    }
+
 
     override fun onBind(intent: Intent): IBinder {
         return binder
+    }
+    fun getCurrentSongName(): String {
+        return if (songNames.isNotEmpty()) songNames[songIndex] else "No song playing"
+    }
+    fun getCurrentIsPlaying(): Boolean {
+        return isPlaying
+    }
+    fun getCurrentPlayMode(): PlayMode {
+        return playMode
+    }
+    fun getCurrentSongDuration(): Int {
+        return mediaPlayer.duration
+    }
+    fun seekTo(position: Int) {
+        if (mediaPlayer.isPlaying) {
+            mediaPlayer.seekTo(position)
+        }
+    }
+    fun changePlayMode(newPlayMode: PlayMode){
+        playMode = newPlayMode
     }
 
     private fun requestPermissions() {
@@ -79,7 +138,7 @@ class MusicService : Service() {
             notificationManager.notify(NOTIFICATION_ID, buildNotification())
         }
         mediaPlayer.setOnCompletionListener {
-            playNextSong()
+            onCompletionPlay()
         }
         handler.post(runnable)
 
@@ -100,6 +159,9 @@ class MusicService : Service() {
         val musicFiles = getMusicFilesFromDirectory()
         if (musicFiles.isNotEmpty()) {
             songNames = musicFiles.map { it.name }
+            if(playMode == PlayMode.RANDOM){
+                songIndex = Random.nextInt(0, songNames.size)
+            }
             loadSong()
         } else {
             songNames = emptyList()
@@ -120,6 +182,8 @@ class MusicService : Service() {
             mediaPlayer.reset()
             mediaPlayer.setDataSource(musicDir + songNames[songIndex])
             mediaPlayer.prepare()
+            notifySongChanged(songNames[songIndex], mediaPlayer.duration)
+            notifyProgressChanged(mediaPlayer.currentPosition)
         } catch (e: IOException) {
             e.printStackTrace()
         }
@@ -134,7 +198,16 @@ class MusicService : Service() {
             R.id.ibtn_play_pause,
             if (isPlaying) R.drawable.cud else R.drawable.cue
         )
+        notificationLayout.setImageViewResource(
+            R.id.ibtnMode,
+            when(playMode){
+                PlayMode.REPEAT -> R.drawable.akv
+                PlayMode.RANDOM -> R.drawable.aku
+                PlayMode.LOOP -> R.drawable.akt
+            }
+        )
         notificationLayout.setInt(R.id.notification_main, "setBackgroundColor", "#FF29B6F6".toColorInt())
+        notificationLayout.setOnClickPendingIntent(R.id.ibtnMode, getPendingIntent(ACTION_MODE))
         notificationLayout.setOnClickPendingIntent(R.id.ibtn_previous, getPendingIntent(ACTION_PREVIOUS))
         notificationLayout.setOnClickPendingIntent(R.id.ibtn_play_pause, getPendingIntent(ACTION_PLAY_PAUSE))
         notificationLayout.setOnClickPendingIntent(R.id.ibtn_next, getPendingIntent(ACTION_NEXT))
@@ -150,6 +223,19 @@ class MusicService : Service() {
             .setContentText(formatTime(mediaPlayer.currentPosition))
             .setCustomContentView(notificationLayout)
             .setContentIntent(pendingIntent)
+            .addAction(
+                when(playMode){
+                    PlayMode.REPEAT -> R.drawable.akv
+                    PlayMode.RANDOM -> R.drawable.aku
+                    PlayMode.LOOP -> R.drawable.akt
+                },
+                when(playMode){
+                    PlayMode.REPEAT -> "单曲循环"
+                    PlayMode.RANDOM -> "随机播放"
+                    PlayMode.LOOP -> "列表循环"
+                },
+                getPendingIntent(ACTION_MODE)
+            )
             .addAction(R.drawable.akw, "Previous", getPendingIntent(ACTION_PREVIOUS))
             .addAction(
                 if (isPlaying) R.drawable.cud else R.drawable.cue,
@@ -178,9 +264,24 @@ class MusicService : Service() {
                 ACTION_NEXT -> playNextSong()
                 ACTION_STOP -> stopSelf()
                 ACTION_LOAD -> loadMusicFiles()
+                ACTION_MODE -> changeToNextPlayMode()
             }
         }
         return START_NOT_STICKY
+    }
+    private fun changeToNextPlayMode(){
+        when(playMode){
+            PlayMode.LOOP -> {
+                playMode = PlayMode.RANDOM
+            }
+            PlayMode.RANDOM -> {
+                playMode = PlayMode.REPEAT
+            }
+            PlayMode.REPEAT -> {
+                playMode = PlayMode.LOOP
+            }
+        }
+        notifyPlayModeChanged(playMode)
     }
 
     internal fun togglePlayPause() {
@@ -190,6 +291,7 @@ class MusicService : Service() {
             mediaPlayer.start()
         }
         isPlaying = !isPlaying
+        notifyPlayPauseChanged(isPlaying)
         notificationManager.notify(NOTIFICATION_ID, buildNotification())
     }
 
@@ -206,14 +308,45 @@ class MusicService : Service() {
     }
 
     internal fun playNextSong() {
-        if (songIndex < songNames.size - 1) {
-            songIndex++
-        } else {
-            songIndex = 0
+        when(playMode){
+            PlayMode.RANDOM -> {
+                songIndex = Random.nextInt(0, songNames.size)
+                loadSong()
+                mediaPlayer.start()
+            }
+            PlayMode.LOOP,PlayMode.REPEAT -> {
+                if (songIndex < songNames.size - 1) {
+                    songIndex++
+                } else {
+                    songIndex = 0
+                }
+                loadSong()
+                mediaPlayer.start()
+            }
         }
-        loadSong()
-        mediaPlayer.start()
         isPlaying = true
+        notificationManager.notify(NOTIFICATION_ID, buildNotification())
+    }
+    private fun onCompletionPlay(){
+        when(playMode){
+            PlayMode.RANDOM -> {
+                songIndex = Random.nextInt(0, songNames.size)
+                loadSong()
+                mediaPlayer.start()
+            }
+            PlayMode.LOOP -> {
+                if (songIndex < songNames.size - 1) {
+                    songIndex++
+                } else {
+                    songIndex = 0
+                }
+                loadSong()
+                mediaPlayer.start()
+            }
+            PlayMode.REPEAT -> {
+                mediaPlayer.seekTo(0)
+            }
+        }
         notificationManager.notify(NOTIFICATION_ID, buildNotification())
     }
 
@@ -244,5 +377,6 @@ class MusicService : Service() {
         const val ACTION_NEXT = "com.hlliu.ma2503.ACTION_NEXT"
         const val ACTION_STOP = "com.hlliu.ma2503.ACTION_STOP"
         const val ACTION_LOAD = "com.hlliu.ma2503.ACTION_LOAD"
+        const val ACTION_MODE = "com.hlliu.ma2503.ACTION_MODE"
     }
 }

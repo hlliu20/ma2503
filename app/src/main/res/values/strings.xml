@@ -58,8 +58,7 @@
     <string name="select">select</string>
     <string name="load">load</string>
     <string name="ImageUrl">图片网址：</string>
-    <string name="image1">image1</string>
-    <string name="loadgallery">LoadGallery</string>
+    <string name="image1">image 1</string>
     <string name="loadGallery">loadGallery</string>
     <string name="todo">TODO</string>
     <string name="_2048">2048</string>
@@ -86,4 +85,6 @@
     <string name="notification_music_play">通知栏音乐播放</string>
     <string name="span" />
     <string name="jingdu_weidu_zhanwei">纬度:\n经度:</string>
+    <string name="song_name">Song Name</string>
+    <string name="_00_00_1">00:00</string>
 </resources>

@@ -1,6 +1,7 @@
 package com.hlliu.ma2503
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import android.media.MediaPlayer
 import android.os.Build
@@ -19,12 +20,13 @@ import androidx.core.view.WindowInsetsCompat
 import java.io.File
 import java.io.IOException
 import java.util.Locale
+import kotlin.random.Random
 
 class MusicActivity : ComponentActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private val runnable = object : Runnable {
         override fun run() {
-            if (mediaPlayer.isPlaying) {
+            if (mediaPlayer.isPlaying && !isSeekBarTracking) {
                 seekBar.progress = mediaPlayer.currentPosition
                 tvCurrentTime.text = formatTime(mediaPlayer.currentPosition)
             }
@@ -40,11 +42,19 @@ class MusicActivity : ComponentActivity() {
     private lateinit var ibtnPlayPause: ImageButton
     private lateinit var ibtnNext: ImageButton
     private lateinit var ibtnSelect: ImageButton
+    private lateinit var ibtnMode: ImageButton
     private var isPlaying = false
     private var songIndex = 0
     private var songTotalTime: Int = 0
     private val musicDir = "/storage/emulated/0/01myfile/music/"
     private lateinit var songNames: List<String>
+    private var isSeekBarTracking = false // 用于标记 SeekBar 是否正在被拖动
+    enum class PlayMode {
+        RANDOM, // 随机播放
+        LOOP,   // 列表循环
+        REPEAT  // 单曲循环
+    }
+    private var playMode = PlayMode.RANDOM
     // 请求权限
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -79,9 +89,9 @@ class MusicActivity : ComponentActivity() {
         ibtnNext = findViewById(R.id.ibtn_next)
         ibtnSelect = findViewById(R.id.ibtn_select)
         seekBar = findViewById(R.id.seek_bar)
+        ibtnMode = findViewById(R.id.ibtnMode)
 
-//         请求存储权限
-        requestPermissions()
+
         // 初始化 MediaPlayer
         mediaPlayer = MediaPlayer()
 
@@ -95,17 +105,26 @@ class MusicActivity : ComponentActivity() {
             isPlaying = true
         }
         mediaPlayer.setOnCompletionListener {
-            playNextSong()
+            onCompletionPlay()
         }
+        // 请求存储权限
+        requestPermissions()
         // 设置 SeekBar 的监听器
         seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
-                    mediaPlayer.seekTo(progress)
+                    isSeekBarTracking = true
+                    tvCurrentTime.text = formatTime(progress)
                 }
             }
-            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {
+                isSeekBarTracking = true
+            }
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                isSeekBarTracking = false
+                val progress = seekBar!!.progress
+                mediaPlayer.seekTo(progress)
+            }
         })
         // 设置播放进度更新
         handler.postDelayed(runnable, 1000)
@@ -117,6 +136,22 @@ class MusicActivity : ComponentActivity() {
         }
         ibtnNext.setOnClickListener {
             playNextSong()
+        }
+        ibtnMode.setOnClickListener {
+            when(playMode){
+                PlayMode.LOOP -> {
+                    playMode = PlayMode.RANDOM
+                    ibtnMode.setImageResource(R.drawable.aku)
+                }
+                PlayMode.RANDOM -> {
+                    playMode = PlayMode.REPEAT
+                    ibtnMode.setImageResource(R.drawable.akv)
+                }
+                PlayMode.REPEAT -> {
+                    playMode = PlayMode.LOOP
+                    ibtnMode.setImageResource(R.drawable.akt)
+                }
+            }
         }
     }
 
@@ -146,7 +181,10 @@ class MusicActivity : ComponentActivity() {
                 val musicName: String = music.name.toString()
                 songNames.add(musicName)
             }
-            tvSongName.text = songNames[0]
+            if(playMode == PlayMode.RANDOM){
+                songIndex = Random.nextInt(0, songNames.size)
+            }
+            tvSongName.text = songNames[songIndex]
             this.songNames = songNames
             loadSong()
 
@@ -180,13 +218,40 @@ class MusicActivity : ComponentActivity() {
     }
 
     private fun playNextSong() {
-        if (songIndex < songNames.size - 1) {
-            songIndex++
-        } else {
-            songIndex = 0
+        when(playMode){
+            PlayMode.RANDOM -> {
+                songIndex = Random.nextInt(0, songNames.size)
+            }
+            PlayMode.LOOP,PlayMode.REPEAT -> {
+                if (songIndex < songNames.size - 1) {
+                    songIndex++
+                } else {
+                    songIndex = 0
+                }
+            }
         }
         loadSong()
     }
+    private fun onCompletionPlay(){
+        when(playMode){
+            PlayMode.RANDOM -> {
+                songIndex = Random.nextInt(0, songNames.size)
+                loadSong()
+            }
+            PlayMode.LOOP -> {
+                if (songIndex < songNames.size - 1) {
+                    songIndex++
+                } else {
+                    songIndex = 0
+                }
+                loadSong()
+            }
+            PlayMode.REPEAT -> {
+                mediaPlayer.seekTo(0)
+            }
+        }
+    }
+    @SuppressLint("SetTextI18n")
     private fun loadSong() {
         if(songNames.isEmpty()){
             tvSongName.text = "列表为空"
